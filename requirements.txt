@@ -1,0 +1,6 @@
+requests
+atproto
+emoji
+IPython
+python-dotenv
+docopt
