@@ -11,8 +11,21 @@ import emoji
 import requests
 from docopt import docopt
 import datetime
+import pycountry_convert
+from collections import Counter
 
 CURRENT_USER_DID = 'did:plc:cv7n7pa4fmtkgyzfl2rf4xn3'
+
+def continent(country_code):
+    if country_code in ['EU', 'EA']:
+        return 'Europe'
+    if country_code in ['UM']:
+        return 'North America'
+    if country_code in ['CP']:
+        return 'unknown'
+    
+    continent_code = pycountry_convert.country_alpha2_to_continent_code(country_code)
+    return pycountry_convert.convert_continent_code_to_continent_name(continent_code)
 
 def create_starterpack(name: str, user_ids: list[str], bearer_token: str) -> bool:
     """
@@ -156,6 +169,8 @@ if __name__ == "__main__":
         ]
         create_starterpack('locco', user_ids, bearer_token)
     elif args['replies']:
+        countries = Counter()
+        continents = Counter()
         client = Client()
         # read password from .env file: BSKY_PASSWORD
         client.login('philippkeller.com', os.getenv('BSKY_PASSWORD'))
@@ -163,10 +178,19 @@ if __name__ == "__main__":
         # go to post, view source and look for at://…
         post_uri = f'at://{CURRENT_USER_DID}/app.bsky.feed.post/3lbodzewg4k2l'
         post = client.get_post_thread(post_uri)
+        # print(f'got {len(post["thread"]["replies"])} replies')
         for reply in post['thread']['replies']:
             text = reply['post']['record']['text']
             # get emojis
             for e in emoji.emoji_list(text):
                 flag = country_code_from_emoji(e['emoji'])
                 if flag:
-                    print(flag)
+                    continent_name = continent(flag)
+                    countries[flag] += 1
+                    continents[continent_name] += 1
+        
+        for country_code, count in countries.most_common(10):
+            print(f'{country_code} {count}')
+
+        for continent_name, count in continents.most_common():
+            print(f'{continent_name} {count}')
