@@ -21,7 +21,7 @@ def continent(country_code):
         return 'Europe'
     if country_code in ['UM']:
         return 'North America'
-    if country_code in ['CP']:
+    if country_code in ['CP', 'IC']:
         return 'unknown'
     
     continent_code = pycountry_convert.country_alpha2_to_continent_code(country_code)
@@ -188,6 +188,7 @@ if __name__ == "__main__":
                     continent_name = continent(flag)
                     countries[flag] += 1
                     continents[continent_name] += 1
+                    break
         
         for country_code, count in countries.most_common(10):
             print(f'{country_code} {count}')
