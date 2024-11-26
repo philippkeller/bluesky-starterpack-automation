@@ -4,6 +4,8 @@
 Usage:
     do.py add-starterpack
     do.py replies
+    do.py starter <uri>
+    do.py starter-packs
 """
 
 from atproto import Client
@@ -22,6 +24,29 @@ CURRENT_USER_DID = 'did:plc:cv7n7pa4fmtkgyzfl2rf4xn3'
 
 # Create a cache directory in the current folder
 memory = Memory(".cache", verbose=0)
+
+def get_all_starter_packs():
+    from atproto import models
+    client = Client()
+    client.login('philippkeller.com', os.getenv('BSKY_PASSWORD'))
+    params = models.AppBskyGraphGetActorStarterPacks.Params(actor=CURRENT_USER_DID)
+    res = client.app.bsky.graph.get_actor_starter_packs(params)
+    for i in res['starter_packs']:
+        name = i['record']['name']
+        uri = i['uri']
+        print(name, uri)
+    return res
+
+def get_starter_pack_members(uri):
+    from atproto import models
+    client = Client()
+    client.login('philippkeller.com', os.getenv('BSKY_PASSWORD'))
+    params = models.AppBskyGraphGetStarterPack.Params(starter_pack=uri)
+    res = client.app.bsky.graph.get_starter_pack(params)
+    list_uri = res['starter_pack']['record']['list']
+    params = models.AppBskyGraphGetList.Params(list=list_uri)
+    list = client.app.bsky.graph.get_list(params)
+    return [l['subject']['did'] for l in list['items']]
 
 # Wrap the get_post_thread function
 @memory.cache
@@ -153,13 +178,14 @@ def create_starterpack(name: str, user_ids: list[str]) -> str:
                            headers=headers, 
                            json=starterpack_data)
     response.raise_for_status()
+    starter_pack_uri = response.json()['uri']
     
     # After successful creation, store the new list_uri
-    existing_lists[name] = list_uri
+    existing_lists[name] = starter_pack_uri
     with open(storage_file, 'w') as f:
         json.dump(existing_lists, f, indent=2)
     
-    return list_uri
+    return starter_pack_uri
 
 def emoji_to_code(flag_emoji):
     # Convert the flag emoji to the regional indicator letters
@@ -200,7 +226,7 @@ if __name__ == "__main__":
             "did:plc:zxzqwrj6v6c2phtfzukqxctv",
             "did:plc:wpfo56wcy4vem72u3vwl33q7"
         ]
-        create_starterpack('locco', user_ids, bearer_token)
+        create_starterpack('locco', user_ids)
     elif args['replies']:
         countries = Counter()
         continents = Counter()
@@ -232,15 +258,23 @@ if __name__ == "__main__":
             # if flag:
             #     print(f'{text_original} -> {flag}')
         
-        for country_code in ['FR']:
+        for country_code in country_dids:
+            if len(country_dids[country_code]) < 7:
+                continue
+            if country_code in ['EU', 'EA']:
+                continue
             # turn country code into flag emoji
             flag = chr(0x1F1E6 + ord(country_code[0]) - 65) + chr(0x1F1E6 + ord(country_code[1]) - 65)
+            print(country_code, flag)
             country_name = pycountry.countries.get(alpha_2=country_code).name
-            if len(country_dids[country_code]) >= 7:
-                create_starterpack(f'#buildinpublic {country_name} {flag}', country_dids[country_code])
+            create_starterpack(f'#buildinpublic {country_name} {flag}', country_dids[country_code])
 
         for country_code, count in countries.most_common(20):
             print(f'{country_code} {count}')
 
         for continent_name, count in continents.most_common():
             print(f'{continent_name} {count}')
+    elif args['starter']:
+        print(get_starter_pack_members(args['<uri>']))
+    elif args['starter-packs']:
+        get_all_starter_packs()
