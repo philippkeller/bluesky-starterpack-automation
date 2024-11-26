@@ -5,3 +5,4 @@ IPython
 python-dotenv
 docopt
 pycountry-convert
+joblib

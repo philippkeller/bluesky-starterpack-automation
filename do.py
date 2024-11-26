@@ -13,8 +13,22 @@ from docopt import docopt
 import datetime
 import pycountry_convert
 from collections import Counter
+from joblib import Memory
+from collections import defaultdict
+import json
+import os
 
 CURRENT_USER_DID = 'did:plc:cv7n7pa4fmtkgyzfl2rf4xn3'
+
+# Create a cache directory in the current folder
+memory = Memory(".cache", verbose=0)
+
+# Wrap the get_post_thread function
+@memory.cache
+def get_cached_post_thread(post_uri):
+    client = Client()
+    client.login('philippkeller.com', os.getenv('BSKY_PASSWORD'))
+    return client.get_post_thread(post_uri)
 
 def continent(country_code):
     if country_code in ['EU', 'EA']:
@@ -22,23 +36,38 @@ def continent(country_code):
     if country_code in ['UM']:
         return 'North America'
     if country_code in ['CP', 'IC']:
-        return 'unknown'
+        return None
     
     continent_code = pycountry_convert.country_alpha2_to_continent_code(country_code)
     return pycountry_convert.convert_continent_code_to_continent_name(continent_code)
 
-def create_starterpack(name: str, user_ids: list[str], bearer_token: str) -> bool:
+def create_starterpack(name: str, user_ids: list[str]) -> str:
     """
     Create a starterpack list with the given name and user IDs.
+    If a list with the same name exists, returns its URI instead of creating a new one.
     
-    Args:
-        name (str): Name of the starterpack (e.g. "#buildinpublic Switzerland")
-        user_ids (list[str]): List of user DIDs to add to the starterpack
-        bearer_token (str): The authentication token
-        
     Returns:
-        bool: True if successful, raises exception otherwise
+        str: The list URI (either existing or newly created)
     """
+    # Check if list already exists
+    storage_file = 'starterpacks.json'
+    existing_lists = {}
+    
+    if os.path.exists(storage_file):
+        with open(storage_file, 'r') as f:
+            existing_lists = json.load(f)
+        
+        if name in existing_lists:
+            return existing_lists[name]
+    
+    import time
+    
+    # check if bearer token file is younger than 1 hour
+    if os.path.exists('.bearer') and os.path.getmtime('.bearer') > time.time() - 3600:
+        bearer_token = open('.bearer').read().split(' ')[1]
+    else:
+        raise Exception("Bearer token is too old")
+    
     base_url = "https://amanita.us-east.host.bsky.network/xrpc"
     headers = {
         'accept': '*/*',
@@ -125,7 +154,12 @@ def create_starterpack(name: str, user_ids: list[str], bearer_token: str) -> boo
                            json=starterpack_data)
     response.raise_for_status()
     
-    return True
+    # After successful creation, store the new list_uri
+    existing_lists[name] = list_uri
+    with open(storage_file, 'w') as f:
+        json.dump(existing_lists, f, indent=2)
+    
+    return list_uri
 
 def emoji_to_code(flag_emoji):
     # Convert the flag emoji to the regional indicator letters
@@ -154,7 +188,6 @@ if __name__ == "__main__":
 
     args = docopt(__doc__)
 
-    bearer_token = open('.bearer').read().split(' ')[1]
 
     if args['add-starterpack']:
         user_ids = [
@@ -171,26 +204,39 @@ if __name__ == "__main__":
     elif args['replies']:
         countries = Counter()
         continents = Counter()
-        client = Client()
-        # read password from .env file: BSKY_PASSWORD
-        client.login('philippkeller.com', os.getenv('BSKY_PASSWORD'))
 
-        # go to post, view source and look for at://…
-        post_uri = f'at://{CURRENT_USER_DID}/app.bsky.feed.post/3lbodzewg4k2l'
-        post = client.get_post_thread(post_uri)
-        # print(f'got {len(post["thread"]["replies"])} replies')
-        for reply in post['thread']['replies']:
-            text = reply['post']['record']['text']
-            # get emojis
-            for e in emoji.emoji_list(text):
-                flag = country_code_from_emoji(e['emoji'])
-                if flag:
-                    continent_name = continent(flag)
-                    countries[flag] += 1
-                    continents[continent_name] += 1
-                    break
+        country_dids = defaultdict(list)
         
-        for country_code, count in countries.most_common(10):
+        post_uri = f'at://{CURRENT_USER_DID}/app.bsky.feed.post/3lbodzewg4k2l'
+        # Now call without client
+        post = get_cached_post_thread(post_uri)
+
+        for i, reply in enumerate(post['thread']['replies']):
+            text_original = reply['post']['record']['text']
+            did = reply['post']['author']['did']
+            # if text has " in " in it (e.g. "living in …") then take 2nd part
+            if " in " in text_original:
+                text = text_original.split(" in ", 1)[1]
+            else:
+                text = text_original
+            # get emojis
+            country_code = None
+            for e in emoji.emoji_list(text):
+                country_code = country_code_from_emoji(e['emoji'])
+                if country_code:
+                    continent_name = continent(country_code)
+                    countries[country_code] += 1
+                    continents[continent_name] += 1
+                    country_dids[country_code].append(did)
+                    break
+            # if flag:
+            #     print(f'{text_original} -> {flag}')
+        
+        for country_code in ['FR']:
+            if len(country_dids[country_code]) >= 7:
+                create_starterpack(f'#buildinpublic {country_code}', country_dids[country_code])
+
+        for country_code, count in countries.most_common(20):
             print(f'{country_code} {count}')
 
         for continent_name, count in continents.most_common():
