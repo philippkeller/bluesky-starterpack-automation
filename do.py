@@ -17,7 +17,7 @@ from joblib import Memory
 from collections import defaultdict
 import json
 import os
-
+import pycountry
 CURRENT_USER_DID = 'did:plc:cv7n7pa4fmtkgyzfl2rf4xn3'
 
 # Create a cache directory in the current folder
@@ -233,8 +233,11 @@ if __name__ == "__main__":
             #     print(f'{text_original} -> {flag}')
         
         for country_code in ['FR']:
+            # turn country code into flag emoji
+            flag = chr(0x1F1E6 + ord(country_code[0]) - 65) + chr(0x1F1E6 + ord(country_code[1]) - 65)
+            country_name = pycountry.countries.get(alpha_2=country_code).name
             if len(country_dids[country_code]) >= 7:
-                create_starterpack(f'#buildinpublic {country_code}', country_dids[country_code])
+                create_starterpack(f'#buildinpublic {country_name} {flag}', country_dids[country_code])
 
         for country_code, count in countries.most_common(20):
             print(f'{country_code} {count}')
