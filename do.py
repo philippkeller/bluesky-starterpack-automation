@@ -213,15 +213,12 @@ def update_starterpacks():
     with open('starterpacks.json', 'r') as f:
         starterpacks = json.load(f)
     starterpacks_new = {}
-    for name in starterpacks:
-        # turn "#buildinpublic France \ud83c\uddeb\ud83c\uddf7" into "FR"
-        country_name = name.split(' ')[1]
-        country_iso = pycountry.countries.get(name=country_name).alpha_2
-        print(f'Updating {name} -> {country_iso}')
-        members, list_uri = get_starter_pack_members(starterpacks[name]['uri'])
+    for country_iso in starterpacks:
+        print(f'Updating {country_iso}')
+        members, list_uri = get_starter_pack_members(starterpacks[country_iso]['uri'])
         starterpacks_new[country_iso] = dict(
-            name=name,
-            uri=starterpacks[name]['uri'],
+            name=starterpacks[country_iso]['name'],
+            uri=starterpacks[country_iso]['uri'],
             members=members,
             list_uri=list_uri
         )
