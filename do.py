@@ -45,9 +45,10 @@ def get_starter_pack_members(uri):
     params = models.AppBskyGraphGetStarterPack.Params(starter_pack=uri)
     res = client.app.bsky.graph.get_starter_pack(params)
     list_uri = res['starter_pack']['record']['list']
+    starter_pack_created_at = res['starter_pack']['record']['created_at']
     params = models.AppBskyGraphGetList.Params(list=list_uri)
     list = client.app.bsky.graph.get_list(params)
-    return [l['subject']['did'] for l in list['items']], list_uri
+    return [l['subject']['did'] for l in list['items']], list_uri, starter_pack_created_at
 
 # Wrap the get_post_thread function
 @memory.cache
@@ -214,16 +215,89 @@ def update_starterpacks():
         starterpacks = json.load(f)
     for country_iso in starterpacks:
         print(f'Updating {country_iso}')
-        members, list_uri = get_starter_pack_members(starterpacks[country_iso]['uri'])
+        members, list_uri, starter_pack_created_at = get_starter_pack_members(starterpacks[country_iso]['uri'])
         starterpacks[country_iso] = dict(
             name=starterpacks[country_iso]['name'],
             uri=starterpacks[country_iso]['uri'],
             members=members,
-            list_uri=list_uri
+            list_uri=list_uri,
+            created_at=starter_pack_created_at
         )
         print(f'{len(members)} members')
     with open('starterpacks.json', 'w') as f:
         json.dump(starterpacks, f, indent=2)
+
+def add_profile_to_starter_pack(profile_uri: str, list_uri: str, starter_pack_uri: str, name: str, created_at: str):
+    """
+    Add a profile to an existing starter pack and update the starter pack record.
+    
+    Args:
+        profile_uri: The DID of the profile to add
+        list_uri: The URI of the list
+        starter_pack_uri: The URI of the starter pack
+        name: The name of the starter pack
+        created_at: The original creation timestamp
+    """
+    import time
+    
+    # Check if bearer token file is younger than 1 hour
+    if os.path.exists('.bearer') and os.path.getmtime('.bearer') > time.time() - 3600:
+        bearer_token = open('.bearer').read().split(' ')[1]
+    else:
+        raise Exception("Bearer token is too old")
+    
+    base_url = "https://amanita.us-east.host.bsky.network/xrpc"
+    headers = {
+        'accept': '*/*',
+        'accept-language': 'en-US,en;q=0.9',
+        'atproto-accept-labelers': 'did:plc:ar7c4by46qjdydhdevvrndac;redact',
+        'authorization': f'Bearer {bearer_token}',
+        'content-type': 'application/json',
+        'origin': 'https://bsky.app',
+        'priority': 'u=1, i',
+        'referer': 'https://bsky.app/'
+    }
+    
+    # Step 1: Add user to the list
+    current_time = datetime.datetime.utcnow().isoformat() + "Z"
+    apply_writes_data = {
+        "repo": CURRENT_USER_DID,
+        "writes": [{
+            "$type": "com.atproto.repo.applyWrites#create",
+            "collection": "app.bsky.graph.listitem",
+            "value": {
+                "$type": "app.bsky.graph.listitem",
+                "subject": profile_uri,
+                "list": list_uri,
+                "createdAt": current_time
+            }
+        }]
+    }
+    
+    response = requests.post(f"{base_url}/com.atproto.repo.applyWrites", 
+                           headers=headers, 
+                           json=apply_writes_data)
+    response.raise_for_status()
+    
+    # Step 2: Update the starter pack record
+    rkey = starter_pack_uri.split('/')[-1]
+    put_record_data = {
+        "repo": CURRENT_USER_DID,
+        "collection": "app.bsky.graph.starterpack",
+        "rkey": rkey,
+        "record": {
+            "name": name,
+            "list": list_uri,
+            "feeds": [],
+            "createdAt": created_at,
+            "updatedAt": current_time
+        }
+    }
+    
+    response = requests.post(f"{base_url}/com.atproto.repo.putRecord", 
+                           headers=headers, 
+                           json=put_record_data)
+    response.raise_for_status()
 
 if __name__ == "__main__":
     import os
