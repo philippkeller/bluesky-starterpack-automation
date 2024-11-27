@@ -47,7 +47,7 @@ def get_starter_pack_members(uri):
     list_uri = res['starter_pack']['record']['list']
     params = models.AppBskyGraphGetList.Params(list=list_uri)
     list = client.app.bsky.graph.get_list(params)
-    return [l['subject']['did'] for l in list['items']]
+    return [l['subject']['did'] for l in list['items']], list_uri
 
 # Wrap the get_post_thread function
 @memory.cache
@@ -212,16 +212,22 @@ def update_starterpacks():
     # loop through all starterpacks in starterpacks.json
     with open('starterpacks.json', 'r') as f:
         starterpacks = json.load(f)
-    for name, uri in starterpacks.items():
-        print(f'Updating {name}')
-        members = get_starter_pack_members(uri)
-        starterpacks[name] = dict(
-            uri=uri,
-            members=members
+    starterpacks_new = {}
+    for name in starterpacks:
+        # turn "#buildinpublic France \ud83c\uddeb\ud83c\uddf7" into "FR"
+        country_name = name.split(' ')[1]
+        country_iso = pycountry.countries.get(name=country_name).alpha_2
+        print(f'Updating {name} -> {country_iso}')
+        members, list_uri = get_starter_pack_members(starterpacks[name]['uri'])
+        starterpacks_new[country_iso] = dict(
+            name=name,
+            uri=starterpacks[name]['uri'],
+            members=members,
+            list_uri=list_uri
         )
         print(f'{len(members)} members')
     with open('starterpacks.json', 'w') as f:
-        json.dump(starterpacks, f, indent=2)
+        json.dump(starterpacks_new, f, indent=2)
 
 if __name__ == "__main__":
     import os
