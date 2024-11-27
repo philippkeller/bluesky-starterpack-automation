@@ -200,7 +200,7 @@ def update_starterpacks():
         starterpacks[country_iso] = dict(
             name=starterpacks[country_iso]['name'],
             uri=starterpacks[country_iso]['uri'],
-            members=members,
+            members=sorted(members),
             list_uri=list_uri,
             created_at=starter_pack_created_at
         )
