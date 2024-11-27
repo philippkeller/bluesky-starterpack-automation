@@ -217,7 +217,7 @@ def create_or_update_starter_pack(*, country_iso, members):
             if member not in starterpacks[country_iso]['members']:
                 print(f'Adding {member} to {country_iso}')
                 add_profile_to_starter_pack(member, starterpacks[country_iso]['list_uri'], starterpacks[country_iso]['uri'], starterpacks[country_iso]['name'], starterpacks[country_iso]['created_at'])
-        starterpacks[country_iso]['members'] = members
+        starterpacks[country_iso]['members'] = sorted(members)
     else:
         name = _name(country_iso)
         print(f'Creating {name} with {len(members)} members')
@@ -225,7 +225,7 @@ def create_or_update_starter_pack(*, country_iso, members):
         starterpacks[country_iso] = dict(
             name=name,
             uri=starter_pack_uri,
-            members=members,
+            members=sorted(members),
             list_uri=list_uri,
             created_at=starterpack_created_at
         )
