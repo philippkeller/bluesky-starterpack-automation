@@ -188,16 +188,19 @@ def emoji_to_code(flag_emoji):
 
 def country_code_from_emoji(char):
     # Method 1: Check for regional indicator symbols (most country flags)
+    country_iso = None
     if len(char) == 2 and all(0x1F1E6 <= ord(c) <= 0x1F1FF for c in char):
-        return emoji_to_code(char)
+        country_iso = emoji_to_code(char)
     
     # Method 2: Check for other special flag emojis
     if emoji.demojize(char).startswith(':flag_'):
         country_code = emoji.demojize(char)[6:]
-        return emoji_to_code(country_code)
+        country_iso = emoji_to_code(country_code)
     
-    else:
+    if country_iso in ['EU', 'EA']:
         return None
+    else:
+        return country_iso
 
 def update_starterpacks():
     # loop through all starterpacks in starterpacks.json
@@ -224,21 +227,22 @@ def create_or_update_starter_pack(*, country_iso, members):
     if country_iso in starterpacks:
         for member in members:
             if member not in starterpacks[country_iso]['members']:
+                print(f'Adding {member} to {country_iso}')
                 add_profile_to_starter_pack(member, starterpacks[country_iso]['list_uri'], starterpacks[country_iso]['uri'], starterpacks[country_iso]['name'], starterpacks[country_iso]['created_at'])
         starterpacks[country_iso]['members'] = members
     else:
         name = _name(country_iso)
-        starter_pack_uri, list_uri, starterpack_created_at = create_starterpack(name, members)
-        starterpacks[country_iso] = dict(
-            name=name,
-            uri=starter_pack_uri,
-            members=members,
-            list_uri=list_uri,
-            created_at=starterpack_created_at
-        )
-    with open('starterpacks.json', 'w') as f:
-        json.dump(starterpacks, f, indent=2)
-    return starter_pack_uri
+        print(f'Creating {name} with {len(members)} members')
+        # starter_pack_uri, list_uri, starterpack_created_at = create_starterpack(name, members)
+        # starterpacks[country_iso] = dict(
+        #     name=name,
+        #     uri=starter_pack_uri,
+        #     members=members,
+        #     list_uri=list_uri,
+        #     created_at=starterpack_created_at
+        # )
+    # with open('starterpacks.json', 'w') as f:
+    #     json.dump(starterpacks, f, indent=2)
     
 
 def add_profile_to_starter_pack(profile_uri: str, list_uri: str, starter_pack_uri: str, name: str, created_at: str):
@@ -339,44 +343,45 @@ if __name__ == "__main__":
 
         country_dids = defaultdict(list)
         
-        post_uri = f'at://{CURRENT_USER_DID}/app.bsky.feed.post/3lbodzewg4k2l'
-        # Now call without client
-        post = get_cached_post_thread(post_uri)
+        post_uris = [
+            f'at://{CURRENT_USER_DID}/app.bsky.feed.post/3lbodzewg4k2l',
+            f'at://{CURRENT_USER_DID}/app.bsky.feed.post/3lbtocclctc2v'
+        ]
 
-        for i, reply in enumerate(post['thread']['replies']):
-            text_original = reply['post']['record']['text']
-            did = reply['post']['author']['did']
-            # if text has " in " in it (e.g. "living in …") then take 2nd part
-            if " in " in text_original:
-                text = text_original.split(" in ", 1)[1]
-            else:
-                text = text_original
-            # get emojis
-            country_code = None
-            for e in emoji.emoji_list(text):
-                country_code = country_code_from_emoji(e['emoji'])
-                if country_code:
-                    continent_name = continent(country_code)
-                    countries[country_code] += 1
-                    continents[continent_name] += 1
-                    country_dids[country_code].append(did)
-                    break
-            # if flag:
-            #     print(f'{text_original} -> {flag}')
+        for post_uri in post_uris:
+            post = get_cached_post_thread(post_uri)
+            for i, reply in enumerate(post['thread']['replies']):
+                text_original = reply['post']['record']['text']
+                did = reply['post']['author']['did']
+                # if text has " in " in it (e.g. "living in …") then take 2nd part
+                if " in " in text_original:
+                    text = text_original.split(" in ", 1)[1]
+                else:
+                    text = text_original
+                # get emojis
+                country_code = None
+                for e in emoji.emoji_list(text):
+                    country_code = country_code_from_emoji(e['emoji'])
+                    if country_code:
+                        continent_name = continent(country_code)
+                        countries[country_code] += 1
+                        continents[continent_name] += 1
+                        country_dids[country_code].append(did)
+                        break
         
         for country_code in country_dids:
+            if country_code not in ['PL']:
+                continue
             if len(country_dids[country_code]) < 7:
                 continue
-            if country_code in ['EU', 'EA']:
-                continue
             country_name = _name(country_code)
-            create_starterpack(country_name, country_dids[country_code])
+            create_or_update_starter_pack(country_iso=country_code, members=country_dids[country_code])
 
-        for country_code, count in countries.most_common(20):
-            print(f'{country_code} {count}')
+        # for country_code, count in countries.most_common(20):
+        #     print(f'{country_code} {count}')
 
-        for continent_name, count in continents.most_common():
-            print(f'{continent_name} {count}')
+        # for continent_name, count in continents.most_common():
+        #     print(f'{continent_name} {count}')
     elif args['starter']:
         print(get_starter_pack_members(args['<uri>']))
     elif args['starter-packs']:
