@@ -313,7 +313,6 @@ if __name__ == "__main__":
 
     args = docopt(__doc__)
 
-
     if args['add-starterpack']:
         user_ids = [
             "did:plc:cv7n7pa4fmtkgyzfl2rf4xn3",
@@ -327,6 +326,9 @@ if __name__ == "__main__":
         ]
         create_starterpack('locco', user_ids)
     elif args['replies']:
+        # check if bsky-curl.txt is too old and fail early
+        if os.path.getmtime('bsky-curl.txt') < time.time() - MAX_BEARER_AGE:
+            raise Exception("Bearer token is too old")
         countries = Counter()
         continents = Counter()
 
