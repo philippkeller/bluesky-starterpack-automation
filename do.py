@@ -212,11 +212,10 @@ def update_starterpacks():
     # loop through all starterpacks in starterpacks.json
     with open('starterpacks.json', 'r') as f:
         starterpacks = json.load(f)
-    starterpacks_new = {}
     for country_iso in starterpacks:
         print(f'Updating {country_iso}')
         members, list_uri = get_starter_pack_members(starterpacks[country_iso]['uri'])
-        starterpacks_new[country_iso] = dict(
+        starterpacks[country_iso] = dict(
             name=starterpacks[country_iso]['name'],
             uri=starterpacks[country_iso]['uri'],
             members=members,
@@ -224,7 +223,7 @@ def update_starterpacks():
         )
         print(f'{len(members)} members')
     with open('starterpacks.json', 'w') as f:
-        json.dump(starterpacks_new, f, indent=2)
+        json.dump(starterpacks, f, indent=2)
 
 if __name__ == "__main__":
     import os
