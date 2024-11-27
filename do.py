@@ -21,6 +21,8 @@ from collections import defaultdict
 import json
 import os
 import pycountry
+import time
+
 CURRENT_USER_DID = 'did:plc:cv7n7pa4fmtkgyzfl2rf4xn3'
 
 # Create a cache directory in the current folder
@@ -56,7 +58,7 @@ def get_starter_pack_members(uri):
     return [l['subject']['did'] for l in list['items']], list_uri, starter_pack_created_at
 
 # Wrap the get_post_thread function
-@memory.cache
+# @memory.cache
 def get_cached_post_thread(post_uri):
     client = Client()
     client.login('philippkeller.com', os.getenv('BSKY_PASSWORD'))
@@ -233,16 +235,16 @@ def create_or_update_starter_pack(*, country_iso, members):
     else:
         name = _name(country_iso)
         print(f'Creating {name} with {len(members)} members')
-        # starter_pack_uri, list_uri, starterpack_created_at = create_starterpack(name, members)
-        # starterpacks[country_iso] = dict(
-        #     name=name,
-        #     uri=starter_pack_uri,
-        #     members=members,
-        #     list_uri=list_uri,
-        #     created_at=starterpack_created_at
-        # )
-    # with open('starterpacks.json', 'w') as f:
-    #     json.dump(starterpacks, f, indent=2)
+        starter_pack_uri, list_uri, starterpack_created_at = create_starterpack(name, members)
+        starterpacks[country_iso] = dict(
+            name=name,
+            uri=starter_pack_uri,
+            members=members,
+            list_uri=list_uri,
+            created_at=starterpack_created_at
+        )
+    with open('starterpacks.json', 'w') as f:
+        json.dump(starterpacks, f, indent=2)
     
 
 def add_profile_to_starter_pack(profile_uri: str, list_uri: str, starter_pack_uri: str, name: str, created_at: str):
@@ -256,7 +258,6 @@ def add_profile_to_starter_pack(profile_uri: str, list_uri: str, starter_pack_ur
         name: The name of the starter pack
         created_at: The original creation timestamp
     """
-    import time
     
     # Check if bearer token file is younger than 1 hour
     if os.path.exists('.bearer') and os.path.getmtime('.bearer') > time.time() - 3600:
@@ -345,7 +346,8 @@ if __name__ == "__main__":
         
         post_uris = [
             f'at://{CURRENT_USER_DID}/app.bsky.feed.post/3lbodzewg4k2l',
-            f'at://{CURRENT_USER_DID}/app.bsky.feed.post/3lbtocclctc2v'
+            f'at://{CURRENT_USER_DID}/app.bsky.feed.post/3lbtocclctc2v',
+            f'at://{CURRENT_USER_DID}/app.bsky.feed.post/3lbwdvxqmg22i'
         ]
 
         for post_uri in post_uris:
@@ -369,19 +371,21 @@ if __name__ == "__main__":
                         country_dids[country_code].append(did)
                         break
         
+        total = 0
         for country_code in country_dids:
-            if country_code not in ['PL']:
-                continue
             if len(country_dids[country_code]) < 7:
                 continue
             country_name = _name(country_code)
             create_or_update_starter_pack(country_iso=country_code, members=country_dids[country_code])
+            total += len(country_dids[country_code])
+        
+        print(f'total: {total}')
 
-        # for country_code, count in countries.most_common(20):
-        #     print(f'{country_code} {count}')
+        for country_code, count in countries.most_common(20):
+            print(f'{country_code} {count}')
 
-        # for continent_name, count in continents.most_common():
-        #     print(f'{continent_name} {count}')
+        for continent_name, count in continents.most_common():
+            print(f'{continent_name} {count}')
     elif args['starter']:
         print(get_starter_pack_members(args['<uri>']))
     elif args['starter-packs']:
