@@ -26,6 +26,11 @@ CURRENT_USER_DID = 'did:plc:cv7n7pa4fmtkgyzfl2rf4xn3'
 # Create a cache directory in the current folder
 memory = Memory(".cache", verbose=0)
 
+def _name(country_iso):
+    country_name = pycountry.countries.get(alpha_2=country_iso).name
+    flag = chr(0x1F1E6 + ord(country_iso[0]) - 65) + chr(0x1F1E6 + ord(country_iso[1]) - 65)
+    return f'#buildinpublic {country_name} {flag}'
+
 def get_all_starter_packs():
     from atproto import models
     client = Client()
@@ -76,19 +81,6 @@ def create_starterpack(name: str, user_ids: list[str]) -> str:
     Returns:
         str: The list URI (either existing or newly created)
     """
-    # Check if list already exists
-    storage_file = 'starterpacks.json'
-    existing_lists = {}
-    
-    if os.path.exists(storage_file):
-        with open(storage_file, 'r') as f:
-            existing_lists = json.load(f)
-        
-        if name in existing_lists:
-            return existing_lists[name]
-    
-    import time
-    
     # check if bearer token file is younger than 1 hour
     if os.path.exists('.bearer') and os.path.getmtime('.bearer') > time.time() - 3600:
         bearer_token = open('.bearer').read().split(' ')[1]
@@ -107,6 +99,8 @@ def create_starterpack(name: str, user_ids: list[str]) -> str:
         'referer': 'https://bsky.app/',
         'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
     }
+
+    created_at = datetime.datetime.utcnow().isoformat() + "Z"
     
     # Step 1: Create the list
     create_list_data = {
@@ -114,7 +108,7 @@ def create_starterpack(name: str, user_ids: list[str]) -> str:
         "repo": CURRENT_USER_DID,
         "record": {
             "name": name,
-            "createdAt": datetime.datetime.utcnow().isoformat() + "Z",
+            "createdAt": created_at,
             "purpose": "app.bsky.graph.defs#referencelist",
             "$type": "app.bsky.graph.list"
         }
@@ -164,6 +158,7 @@ def create_starterpack(name: str, user_ids: list[str]) -> str:
             raise Exception("User addition validation failed")
     
     # Step 3: Create the starterpack
+    starterpack_created_at = datetime.datetime.utcnow().isoformat() + "Z"
     starterpack_data = {
         "collection": "app.bsky.graph.starterpack",
         "repo": CURRENT_USER_DID,
@@ -171,7 +166,7 @@ def create_starterpack(name: str, user_ids: list[str]) -> str:
             "name": name,
             "list": list_uri,
             "feeds": [],
-            "createdAt": datetime.datetime.utcnow().isoformat() + "Z",
+            "createdAt": starterpack_created_at,
             "$type": "app.bsky.graph.starterpack"
         }
     }
@@ -182,12 +177,7 @@ def create_starterpack(name: str, user_ids: list[str]) -> str:
     response.raise_for_status()
     starter_pack_uri = response.json()['uri']
     
-    # After successful creation, store the new list_uri
-    existing_lists[name] = starter_pack_uri
-    with open(storage_file, 'w') as f:
-        json.dump(existing_lists, f, indent=2)
-    
-    return starter_pack_uri
+    return starter_pack_uri, list_uri, starterpack_created_at
 
 def emoji_to_code(flag_emoji):
     # Convert the flag emoji to the regional indicator letters
@@ -226,6 +216,30 @@ def update_starterpacks():
         print(f'{len(members)} members')
     with open('starterpacks.json', 'w') as f:
         json.dump(starterpacks, f, indent=2)
+
+def create_or_update_starter_pack(*, country_iso, members):
+    # check if country_iso is in starterpacks.json
+    with open('starterpacks.json', 'r') as f:
+        starterpacks = json.load(f)
+    if country_iso in starterpacks:
+        for member in members:
+            if member not in starterpacks[country_iso]['members']:
+                add_profile_to_starter_pack(member, starterpacks[country_iso]['list_uri'], starterpacks[country_iso]['uri'], starterpacks[country_iso]['name'], starterpacks[country_iso]['created_at'])
+        starterpacks[country_iso]['members'] = members
+    else:
+        name = _name(country_iso)
+        starter_pack_uri, list_uri, starterpack_created_at = create_starterpack(name, members)
+        starterpacks[country_iso] = dict(
+            name=name,
+            uri=starter_pack_uri,
+            members=members,
+            list_uri=list_uri,
+            created_at=starterpack_created_at
+        )
+    with open('starterpacks.json', 'w') as f:
+        json.dump(starterpacks, f, indent=2)
+    return starter_pack_uri
+    
 
 def add_profile_to_starter_pack(profile_uri: str, list_uri: str, starter_pack_uri: str, name: str, created_at: str):
     """
@@ -355,11 +369,8 @@ if __name__ == "__main__":
                 continue
             if country_code in ['EU', 'EA']:
                 continue
-            # turn country code into flag emoji
-            flag = chr(0x1F1E6 + ord(country_code[0]) - 65) + chr(0x1F1E6 + ord(country_code[1]) - 65)
-            print(country_code, flag)
-            country_name = pycountry.countries.get(alpha_2=country_code).name
-            create_starterpack(f'#buildinpublic {country_name} {flag}', country_dids[country_code])
+            country_name = _name(country_code)
+            create_starterpack(country_name, country_dids[country_code])
 
         for country_code, count in countries.most_common(20):
             print(f'{country_code} {count}')
