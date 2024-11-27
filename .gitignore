@@ -2,3 +2,4 @@
 .bearer
 __pycache__
 .cache
+bsky-curl.txt

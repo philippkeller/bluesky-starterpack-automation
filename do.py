@@ -23,6 +23,8 @@ import os
 import pycountry
 import time
 
+MAX_BEARER_AGE = 3600
+
 CURRENT_USER_DID = 'did:plc:cv7n7pa4fmtkgyzfl2rf4xn3'
 
 # Create a cache directory in the current folder
@@ -83,24 +85,8 @@ def create_starterpack(name: str, user_ids: list[str]) -> str:
     Returns:
         str: The list URI (either existing or newly created)
     """
-    # check if bearer token file is younger than 1 hour
-    if os.path.exists('.bearer') and os.path.getmtime('.bearer') > time.time() - 3600:
-        bearer_token = open('.bearer').read().split(' ')[1]
-    else:
-        raise Exception("Bearer token is too old")
-    
     base_url = "https://amanita.us-east.host.bsky.network/xrpc"
-    headers = {
-        'accept': '*/*',
-        'accept-language': 'en-US,en;q=0.9',
-        'atproto-accept-labelers': 'did:plc:ar7c4by46qjdydhdevvrndac;redact',
-        'authorization': f'Bearer {bearer_token}',
-        'content-type': 'application/json',
-        'origin': 'https://bsky.app',
-        'priority': 'u=1, i',
-        'referer': 'https://bsky.app/',
-        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-    }
+    headers = get_headers()
 
     created_at = datetime.datetime.utcnow().isoformat() + "Z"
     
@@ -246,6 +232,23 @@ def create_or_update_starter_pack(*, country_iso, members):
     with open('starterpacks.json', 'w') as f:
         json.dump(starterpacks, f, indent=2)
     
+def get_headers():
+    import json
+    if os.path.exists('bsky-curl.txt') and os.path.getmtime('bsky-curl.txt') > time.time() - MAX_BEARER_AGE:
+        content = open('bsky-curl.txt').read()
+    else:
+        raise Exception("Bearer token is too old")
+
+    headers = {}
+    for line in content.split('\n'):
+        if line.startswith('curl'):
+            continue
+        # get part between ' and '
+        line = line.split("'")[1]
+        key, value = line.split(': ')
+        headers[key] = value
+
+    return headers
 
 def add_profile_to_starter_pack(profile_uri: str, list_uri: str, starter_pack_uri: str, name: str, created_at: str):
     """
@@ -259,23 +262,8 @@ def add_profile_to_starter_pack(profile_uri: str, list_uri: str, starter_pack_ur
         created_at: The original creation timestamp
     """
     
-    # Check if bearer token file is younger than 1 hour
-    if os.path.exists('.bearer') and os.path.getmtime('.bearer') > time.time() - 3600:
-        bearer_token = open('.bearer').read().split(' ')[1]
-    else:
-        raise Exception("Bearer token is too old")
-    
     base_url = "https://amanita.us-east.host.bsky.network/xrpc"
-    headers = {
-        'accept': '*/*',
-        'accept-language': 'en-US,en;q=0.9',
-        'atproto-accept-labelers': 'did:plc:ar7c4by46qjdydhdevvrndac;redact',
-        'authorization': f'Bearer {bearer_token}',
-        'content-type': 'application/json',
-        'origin': 'https://bsky.app',
-        'priority': 'u=1, i',
-        'referer': 'https://bsky.app/'
-    }
+    headers = get_headers()
     
     # Step 1: Add user to the list
     current_time = datetime.datetime.utcnow().isoformat() + "Z"
@@ -370,6 +358,8 @@ if __name__ == "__main__":
                         continents[continent_name] += 1
                         country_dids[country_code].append(did)
                         break
+                # if did == 'did:plc:4uffegxrrkc4ftb6r3w63gpe':
+                #     print(text, country_code)
         
         total = 0
         for country_code in country_dids:
@@ -381,11 +371,11 @@ if __name__ == "__main__":
         
         print(f'total: {total}')
 
-        for country_code, count in countries.most_common(20):
-            print(f'{country_code} {count}')
+        # for country_code, count in countries.most_common():
+        #     print(f'{country_code} {count}')
 
-        for continent_name, count in continents.most_common():
-            print(f'{continent_name} {count}')
+        # for continent_name, count in continents.most_common():
+        #     print(f'{continent_name} {count}')
     elif args['starter']:
         print(get_starter_pack_members(args['<uri>']))
     elif args['starter-packs']:
