@@ -6,6 +6,7 @@ Usage:
     do.py replies
     do.py starter <uri>
     do.py starter-packs
+    do.py update-starterpacks
 """
 
 from atproto import Client
@@ -207,6 +208,21 @@ def country_code_from_emoji(char):
     else:
         return None
 
+def update_starterpacks():
+    # loop through all starterpacks in starterpacks.json
+    with open('starterpacks.json', 'r') as f:
+        starterpacks = json.load(f)
+    for name, uri in starterpacks.items():
+        print(f'Updating {name}')
+        members = get_starter_pack_members(uri)
+        starterpacks[name] = dict(
+            uri=uri,
+            members=members
+        )
+        print(f'{len(members)} members')
+    with open('starterpacks.json', 'w') as f:
+        json.dump(starterpacks, f, indent=2)
+
 if __name__ == "__main__":
     import os
     import dotenv
@@ -278,3 +294,5 @@ if __name__ == "__main__":
         print(get_starter_pack_members(args['<uri>']))
     elif args['starter-packs']:
         get_all_starter_packs()
+    elif args['update-starterpacks']:
+        update_starterpacks()
