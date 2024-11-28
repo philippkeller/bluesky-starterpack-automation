@@ -2,7 +2,7 @@
 
 """
 Usage:
-    do.py replies
+    do.py replies [--stats]
     do.py starter <uri>
     do.py update-starterpacks
 
@@ -344,7 +344,9 @@ if __name__ == "__main__":
                         continents[continent_name] += 1
                         country_dids[country_code].append(did)
                         break
-        
+                
+                # if did == 'did:plc:iyjda5z632gdbjgmotr6e55c':
+                #     print(text_original)
         total = 0
         for country_code in country_dids:
             if len(country_dids[country_code]) < 7:
@@ -353,13 +355,14 @@ if __name__ == "__main__":
             create_or_update_starter_pack(country_iso=country_code, members=country_dids[country_code])
             total += len(country_dids[country_code])
         
-        print(f'total: {total}')
+        if args['--stats']:
+            print(f'total: {total}')
 
-        for country_code, count in countries.most_common():
-            print(f'{country_code} {count}')
+            for country_code, count in countries.most_common():
+                print(f'{country_code} {count}')
 
-        for continent_name, count in continents.most_common():
-            print(f'{continent_name} {count}')
+            for continent_name, count in continents.most_common():
+                print(f'{continent_name} {count}')
     elif args['starter']:
         print(get_starter_pack_members(args['<uri>']))
     elif args['update-starterpacks']:
