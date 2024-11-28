@@ -2,11 +2,13 @@
 
 """
 Usage:
-    do.py add-starterpack
     do.py replies
     do.py starter <uri>
-    do.py starter-packs
     do.py update-starterpacks
+
+do.py replies              - pull replies from bluesky - look at the country flag and add them to starterpacks
+do.py starter <uri>        - get the members of a starterpack
+do.py update-starterpacks  - update the starterpacks.json file with the members added manually via the web interface
 """
 
 from atproto import Client
@@ -16,7 +18,6 @@ from docopt import docopt
 import datetime
 import pycountry_convert
 from collections import Counter
-from joblib import Memory
 from collections import defaultdict
 import json
 import os
@@ -27,8 +28,11 @@ MAX_BEARER_AGE = 3600
 
 CURRENT_USER_DID = 'did:plc:cv7n7pa4fmtkgyzfl2rf4xn3'
 
-# Create a cache directory in the current folder
-memory = Memory(".cache", verbose=0)
+POST_URIS = [
+    f'at://{CURRENT_USER_DID}/app.bsky.feed.post/3lbodzewg4k2l',
+    f'at://{CURRENT_USER_DID}/app.bsky.feed.post/3lbtocclctc2v',
+    f'at://{CURRENT_USER_DID}/app.bsky.feed.post/3lbwdvxqmg22i'
+]
 
 def _name(country_iso):
     country_name = pycountry.countries.get(alpha_2=country_iso).name
@@ -38,7 +42,7 @@ def _name(country_iso):
 def get_all_starter_packs():
     from atproto import models
     client = Client()
-    client.login('philippkeller.com', os.getenv('BSKY_PASSWORD'))
+    client.login(os.getenv('BLUESKY_USERNAME'), os.getenv('BLUESKY_PASSWORD'))
     params = models.AppBskyGraphGetActorStarterPacks.Params(actor=CURRENT_USER_DID)
     res = client.app.bsky.graph.get_actor_starter_packs(params)
     for i in res['starter_packs']:
@@ -59,11 +63,9 @@ def get_starter_pack_members(uri):
     list = client.app.bsky.graph.get_list(params)
     return [l['subject']['did'] for l in list['items']], list_uri, starter_pack_created_at
 
-# Wrap the get_post_thread function
-# @memory.cache
 def get_cached_post_thread(post_uri):
     client = Client()
-    client.login('philippkeller.com', os.getenv('BSKY_PASSWORD'))
+    client.login(os.getenv('BLUESKY_USERNAME'), os.getenv('BLUESKY_PASSWORD'))
     return client.get_post_thread(post_uri)
 
 def continent(country_code):
@@ -313,19 +315,7 @@ if __name__ == "__main__":
 
     args = docopt(__doc__)
 
-    if args['add-starterpack']:
-        user_ids = [
-            "did:plc:cv7n7pa4fmtkgyzfl2rf4xn3",
-            "did:plc:phuqmj3y6qv3egonxkbf5byw",
-            "did:plc:vf7tv7uq23avbpzkjswlv273",
-            "did:plc:udvbq6dntlp3huisidgytqju",
-            "did:plc:zivbusxwcsom5o6mf7kljzms",
-            "did:plc:2b2lqipf3vklnfslluzsqiso",
-            "did:plc:zxzqwrj6v6c2phtfzukqxctv",
-            "did:plc:wpfo56wcy4vem72u3vwl33q7"
-        ]
-        create_starterpack('locco', user_ids)
-    elif args['replies']:
+    if args['replies']:
         # check if bsky-curl.txt is too old and fail early
         if os.path.getmtime('bsky-curl.txt') < time.time() - MAX_BEARER_AGE:
             raise Exception("Bearer token is too old")
@@ -334,13 +324,7 @@ if __name__ == "__main__":
 
         country_dids = defaultdict(list)
         
-        post_uris = [
-            f'at://{CURRENT_USER_DID}/app.bsky.feed.post/3lbodzewg4k2l',
-            f'at://{CURRENT_USER_DID}/app.bsky.feed.post/3lbtocclctc2v',
-            f'at://{CURRENT_USER_DID}/app.bsky.feed.post/3lbwdvxqmg22i'
-        ]
-
-        for post_uri in post_uris:
+        for post_uri in POST_URIS:
             post = get_cached_post_thread(post_uri)
             for i, reply in enumerate(post['thread']['replies']):
                 text_original = reply['post']['record']['text']
@@ -360,8 +344,6 @@ if __name__ == "__main__":
                         continents[continent_name] += 1
                         country_dids[country_code].append(did)
                         break
-                # if did == 'did:plc:4uffegxrrkc4ftb6r3w63gpe':
-                #     print(text, country_code)
         
         total = 0
         for country_code in country_dids:
@@ -373,14 +355,12 @@ if __name__ == "__main__":
         
         print(f'total: {total}')
 
-        # for country_code, count in countries.most_common():
-        #     print(f'{country_code} {count}')
+        for country_code, count in countries.most_common():
+            print(f'{country_code} {count}')
 
-        # for continent_name, count in continents.most_common():
-        #     print(f'{continent_name} {count}')
+        for continent_name, count in continents.most_common():
+            print(f'{continent_name} {count}')
     elif args['starter']:
         print(get_starter_pack_members(args['<uri>']))
-    elif args['starter-packs']:
-        get_all_starter_packs()
     elif args['update-starterpacks']:
         update_starterpacks()
