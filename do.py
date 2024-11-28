@@ -355,8 +355,9 @@ if __name__ == "__main__":
             create_or_update_starter_pack(country_iso=country_code, members=country_dids[country_code])
             total += len(country_dids[country_code])
         
+        print(f'total: {total}')
+
         if args['--stats']:
-            print(f'total: {total}')
 
             for country_code, count in countries.most_common():
                 print(f'{country_code} {count}')
