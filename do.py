@@ -5,10 +5,14 @@ Usage:
     do.py replies [--stats]
     do.py starter <uri>
     do.py update-starterpacks
+    do.py get-starterpacks <did>
+    do.py get-starterpack-members <uri>
 
-do.py replies              - pull replies from bluesky - look at the country flag and add them to starterpacks
-do.py starter <uri>        - get the members of a starterpack
-do.py update-starterpacks  - update the starterpacks.json file with the members added manually via the web interface
+do.py replies                       - pull replies from bluesky - look at the country flag and add them to starterpacks
+do.py starter <uri>                 - get the members of a starterpack
+do.py update-starterpacks           - update the starterpacks.json file with the members added manually via the web interface
+do.py get-starterpacks <did>        - get all starterpacks for a given user
+do.py get-starterpack-members <uri> - get the members of a starterpack
 """
 
 from atproto import Client
@@ -39,11 +43,11 @@ def _name(country_iso):
     flag = chr(0x1F1E6 + ord(country_iso[0]) - 65) + chr(0x1F1E6 + ord(country_iso[1]) - 65)
     return f'#buildinpublic {country_name} {flag}'
 
-def get_all_starter_packs():
+def get_all_starter_packs(did=CURRENT_USER_DID):
     from atproto import models
     client = Client()
     client.login(os.getenv('BLUESKY_USERNAME'), os.getenv('BLUESKY_PASSWORD'))
-    params = models.AppBskyGraphGetActorStarterPacks.Params(actor=CURRENT_USER_DID)
+    params = models.AppBskyGraphGetActorStarterPacks.Params(actor=did)
     res = client.app.bsky.graph.get_actor_starter_packs(params)
     for i in res['starter_packs']:
         name = i['record']['name']
@@ -54,7 +58,7 @@ def get_all_starter_packs():
 def get_starter_pack_members(uri):
     from atproto import models
     client = Client()
-    client.login('philippkeller.com', os.getenv('BSKY_PASSWORD'))
+    client.login(os.getenv('BLUESKY_USERNAME'), os.getenv('BLUESKY_PASSWORD'))
     params = models.AppBskyGraphGetStarterPack.Params(starter_pack=uri)
     res = client.app.bsky.graph.get_starter_pack(params)
     list_uri = res['starter_pack']['record']['list']
@@ -323,7 +327,16 @@ if __name__ == "__main__":
         continents = Counter()
 
         country_dids = defaultdict(list)
-        
+
+        # sideload some starterpacks
+        sideload_starterpacks = [
+            ('CN', 'at://did:plc:nhsoiitzsxouxhs7ptflqjib/app.bsky.graph.starterpack/3lbyynkaqqz2k')
+        ]
+
+        for country_iso, starterpack_uri in sideload_starterpacks:
+            members, list_uri, starter_pack_created_at = get_starter_pack_members(starterpack_uri)
+            country_dids[country_iso] = members
+
         for post_uri in POST_URIS:
             post = get_cached_post_thread(post_uri)
             for i, reply in enumerate(post['thread']['replies']):
@@ -368,3 +381,10 @@ if __name__ == "__main__":
         print(get_starter_pack_members(args['<uri>']))
     elif args['update-starterpacks']:
         update_starterpacks()
+    elif args['get-starterpacks']:
+        packs = get_all_starter_packs(args['<did>'])
+        for pack in packs['starter_packs']:
+            print(pack['record']['name'], pack['uri'])
+    elif args['get-starterpack-members']:
+        members, list_uri, starter_pack_created_at = get_starter_pack_members(args['<uri>'])
+        print(members)
