@@ -4,3 +4,4 @@ emoji
 python-dotenv
 docopt
 pycountry-convert
+joblib

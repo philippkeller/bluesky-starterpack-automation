@@ -7,7 +7,7 @@ Usage:
     do.py update-starterpacks
     do.py get-starterpacks <did>
     do.py get-starterpack-members <uri>
-
+    do.py get-post <uri>
 do.py replies                       - pull replies from bluesky - look at the country flag and add them to starterpacks
 do.py starter <uri>                 - get the members of a starterpack
 do.py update-starterpacks           - update the starterpacks.json file with the members added manually via the web interface
@@ -27,6 +27,7 @@ import json
 import os
 import pycountry
 import time
+from joblib import Memory
 
 MAX_BEARER_AGE = 3600
 
@@ -38,10 +39,25 @@ POST_URIS = [
     f'at://{CURRENT_USER_DID}/app.bsky.feed.post/3lbwdvxqmg22i'
 ]
 
+memory = Memory(location='.cache', verbose=0)
+
 def _name(country_iso):
     country_name = pycountry.countries.get(alpha_2=country_iso).name
     flag = chr(0x1F1E6 + ord(country_iso[0]) - 65) + chr(0x1F1E6 + ord(country_iso[1]) - 65)
     return f'#buildinpublic {country_name} {flag}'
+
+@memory.cache
+def get_post_mentions(post_uri):
+    client = Client()
+    client.login(os.getenv('BLUESKY_USERNAME'), os.getenv('BLUESKY_PASSWORD'))
+    post = client.get_post_thread(post_uri)
+    members = []
+    try:
+        for facet in post['thread']['post']['record']['facets']:
+            members.append(facet['features'][0]['did'])
+    except KeyError:
+        pass
+    return members
 
 def get_all_starter_packs(did=CURRENT_USER_DID):
     from atproto import models
@@ -330,12 +346,21 @@ if __name__ == "__main__":
 
         # sideload some starterpacks
         sideload_starterpacks = [
-            ('CN', 'at://did:plc:nhsoiitzsxouxhs7ptflqjib/app.bsky.graph.starterpack/3lbyynkaqqz2k')
+            ('CN', 'at://did:plc:nhsoiitzsxouxhs7ptflqjib/app.bsky.graph.starterpack/3lbyynkaqqz2k'),
+            ('IT', 'at://did:plc:l2ermhmovacku4iikta656zf/app.bsky.graph.starterpack/3lbx4piaquc2j'),
         ]
 
         for country_iso, starterpack_uri in sideload_starterpacks:
             members, list_uri, starter_pack_created_at = get_starter_pack_members(starterpack_uri)
             country_dids[country_iso] = members
+        
+        # sideload from posts
+        sideload_posts = [
+            ('DK', 'at://did:plc:52rfaxvrz6wij3cwkifh3ut7/app.bsky.feed.post/3lbu2sk5pur2s')
+        ]
+        for country_iso, post_uri in sideload_posts:
+            dids = list(get_post_mentions(post_uri))
+            country_dids[country_iso] = dids
 
         for post_uri in POST_URIS:
             post = get_cached_post_thread(post_uri)
@@ -388,3 +413,6 @@ if __name__ == "__main__":
     elif args['get-starterpack-members']:
         members, list_uri, starter_pack_created_at = get_starter_pack_members(args['<uri>'])
         print(members)
+    elif args['get-post']:
+        mentions = list(get_post_mentions(args['<uri>']))
+        print(mentions)
