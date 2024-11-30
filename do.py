@@ -36,7 +36,8 @@ CURRENT_USER_DID = 'did:plc:cv7n7pa4fmtkgyzfl2rf4xn3'
 POST_URIS = [
     f'at://{CURRENT_USER_DID}/app.bsky.feed.post/3lbodzewg4k2l',
     f'at://{CURRENT_USER_DID}/app.bsky.feed.post/3lbtocclctc2v',
-    f'at://{CURRENT_USER_DID}/app.bsky.feed.post/3lbwdvxqmg22i'
+    f'at://{CURRENT_USER_DID}/app.bsky.feed.post/3lbwdvxqmg22i',
+    f'at://{CURRENT_USER_DID}/app.bsky.feed.post/3lc5ukgpbfs2r',
 ]
 
 memory = Memory(location='.cache', verbose=0)
@@ -71,6 +72,7 @@ def get_all_starter_packs(did=CURRENT_USER_DID):
         print(name, uri)
     return res
 
+@memory.cache
 def get_starter_pack_members(uri):
     from atproto import models
     client = Client()
@@ -234,6 +236,10 @@ def create_or_update_starter_pack(*, country_iso, members):
     # check if country_iso is in starterpacks.json
     with open('starterpacks.json', 'r') as f:
         starterpacks = json.load(f)
+    
+    # deduplicate members
+    members = list(set(members))
+
     if country_iso in starterpacks:
         for member in members:
             if member not in starterpacks[country_iso]['members']:
@@ -348,6 +354,7 @@ if __name__ == "__main__":
         sideload_starterpacks = [
             ('CN', 'at://did:plc:nhsoiitzsxouxhs7ptflqjib/app.bsky.graph.starterpack/3lbyynkaqqz2k'),
             ('IT', 'at://did:plc:l2ermhmovacku4iikta656zf/app.bsky.graph.starterpack/3lbx4piaquc2j'),
+            ('NL', 'at://did:plc:nhlv6mfdlcca4ihm65zcdbc3/app.bsky.graph.starterpack/3lbri25eh222e'),
         ]
 
         for country_iso, starterpack_uri in sideload_starterpacks:
@@ -356,7 +363,8 @@ if __name__ == "__main__":
         
         # sideload from posts
         sideload_posts = [
-            ('DK', 'at://did:plc:52rfaxvrz6wij3cwkifh3ut7/app.bsky.feed.post/3lbu2sk5pur2s')
+            ('DK', 'at://did:plc:52rfaxvrz6wij3cwkifh3ut7/app.bsky.feed.post/3lbu2sk5pur2s'),
+            ('LT', 'at://did:plc:4emx4cti65cwfm2qzuqk7svn/app.bsky.feed.post/3lbwwvbaisk2w'),
         ]
         for country_iso, post_uri in sideload_posts:
             dids = list(get_post_mentions(post_uri))
@@ -396,12 +404,25 @@ if __name__ == "__main__":
         print(f'total: {total}')
 
         if args['--stats']:
-
+            starterpacks = json.load(open('starterpacks.json'))
+            starterpack_info_uris = []
             for country_code, count in countries.most_common():
-                print(f'{country_code} {count}')
-
+                flag = chr(0x1F1E6 + ord(country_code[0]) - 65) + chr(0x1F1E6 + ord(country_code[1]) - 65)
+                try:
+                    country_name = pycountry.countries.get(alpha_2=country_code).name
+                    if country_code in starterpacks:
+                        uri = starterpacks[country_code]['uri']
+                        id = uri.split('/')[-1]
+                        url = f'https://bsky.app/starter-pack/{CURRENT_USER_DID}/{id}'
+                        starterpack_info_uris.append(f'{country_name} {flag} {url}')
+                except AttributeError:
+                    print(f'{country_code} not found')
+                    continue
+                print(f'{flag} {count}')
             for continent_name, count in continents.most_common():
-                print(f'{continent_name} {count}')
+                print(f'{continent_name} {count} {100.0 * count / total:.1f}%')
+            for starterpack_uri in starterpack_info_uris:
+                print(starterpack_uri)
     elif args['starter']:
         print(get_starter_pack_members(args['<uri>']))
     elif args['update-starterpacks']:
