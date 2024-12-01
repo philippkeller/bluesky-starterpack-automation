@@ -15,6 +15,21 @@ do.py get-starterpacks <did>        - get all starterpacks for a given user
 do.py get-starterpack-members <uri> - get the members of a starterpack
 """
 
+
+#   "latin-america": {
+#     "name": "#buildinpublic Latin America",
+#     "uri": "at://did:plc:cv7n7pa4fmtkgyzfl2rf4xn3/app.bsky.graph.starterpack/3lca4klxfoa2s",
+#     "members": [
+#       "did:plc:a45oi2lir4w64f56szmzuezk",
+#       "did:plc:j7njyh72czysau5zmgsx3hz6",
+#       "did:plc:rjfhkbs5khtafl25575dkml3",
+#       "did:plc:s6s4hpwxtluk26gg6tuajaho",
+#       "did:plc:y73cxx76kfmyic3d2yeurmql"
+#     ],
+#     "list_uri": "at://did:plc:cv7n7pa4fmtkgyzfl2rf4xn3/app.bsky.graph.list/3lca4kl7rot2t",
+#     "created_at": "2024-12-01T07:46:26.521545Z"
+#   },
+
 from atproto import Client
 import emoji
 import requests
@@ -40,9 +55,24 @@ POST_URIS = [
     f'at://{CURRENT_USER_DID}/app.bsky.feed.post/3lc5ukgpbfs2r',
 ]
 
+SPECIAL_REGIONS = dict(
+    latin_america=dict(
+        country_codes=['CL', 'CO', 'CR', 'DO', 'EC', 'GT', 'HN', 'MX', 'NI', 'PA', 'PE', 'PR', 'SV', 'UY', 'VE'],
+        country_name='Latin America',
+        flag_emoji='🌎',
+    ),
+    africa=dict(
+        country_codes=['DZ', 'AO', 'BJ', 'BW', 'BF', 'BI', 'CM', 'CV', 'DJ', 'EG', 'GQ', 'ER', 'ET', 'GA', 'GM', 'GH', 'GN', 'GW', 'KE', 'LS', 'LR', 'LY', 'MG', 'MW', 'ML', 'MR', 'MU', 'MZ', 'NA', 'NE', 'NG', 'RE', 'RW', 'SN', 'SC', 'SL', 'ST', 'SZ', 'TD', 'UG', 'YT', 'ZM', 'ZW'],
+        country_name='Africa',
+        flag_emoji='🌍',
+    ),
+)
+
 memory = Memory(location='.cache', verbose=0)
 
 def _name(country_iso):
+    if country_iso == 'latin-america':
+        return '#buildinpublic Latin America'
     country_name = pycountry.countries.get(alpha_2=country_iso).name
     flag = chr(0x1F1E6 + ord(country_iso[0]) - 65) + chr(0x1F1E6 + ord(country_iso[1]) - 65)
     return f'#buildinpublic {country_name} {flag}'
@@ -214,10 +244,16 @@ def country_code_from_emoji(char):
     else:
         return country_iso
 
+def write_starterpacks(starterpacks):
+    # backup old file into /var/tmp/ because sometimes IDE screws up the file
+    import os
+    import datetime
+    os.rename('starterpacks.json', f'/var/tmp/starterpacks-{datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")}.json')
+    json.dump(starterpacks, open('starterpacks.json', 'w'), indent=2)
+
 def update_starterpacks():
     # loop through all starterpacks in starterpacks.json
-    with open('starterpacks.json', 'r') as f:
-        starterpacks = json.load(f)
+    starterpacks = json.load(open('starterpacks.json'))
     for country_iso in starterpacks:
         print(f'Updating {country_iso}')
         members, list_uri, starter_pack_created_at = get_starter_pack_members(starterpacks[country_iso]['uri'])
@@ -229,13 +265,11 @@ def update_starterpacks():
             created_at=starter_pack_created_at
         )
         print(f'{len(members)} members')
-    with open('starterpacks.json', 'w') as f:
-        json.dump(starterpacks, f, indent=2)
+    write_starterpacks(starterpacks)
 
 def create_or_update_starter_pack(*, country_iso, members):
     # check if country_iso is in starterpacks.json
-    with open('starterpacks.json', 'r') as f:
-        starterpacks = json.load(f)
+    starterpacks = json.load(open('starterpacks.json'))
     
     # deduplicate members
     members = list(set(members))
@@ -257,8 +291,7 @@ def create_or_update_starter_pack(*, country_iso, members):
             list_uri=list_uri,
             created_at=starterpack_created_at
         )
-    with open('starterpacks.json', 'w') as f:
-        json.dump(starterpacks, f, indent=2)
+    write_starterpacks(starterpacks)
     
 def get_headers():
     import json
@@ -369,7 +402,12 @@ if __name__ == "__main__":
         ]
         for country_iso, post_uri in sideload_posts:
             dids = list(get_post_mentions(post_uri))
-            country_dids[country_iso] = dids
+            country_dids[country_iso].extend(dids)
+        
+        if args['--stats']:
+            print('sideloaded:')
+            for country_iso, members in country_dids.items():
+                print(f'{country_iso}: {len(members)}')
 
         for post_uri in POST_URIS:
             post = get_cached_post_thread(post_uri)
@@ -390,6 +428,10 @@ if __name__ == "__main__":
                         countries[country_code] += 1
                         continents[continent_name] += 1
                         country_dids[country_code].append(did)
+
+                        # if it's Latin America, add to LT
+                        if country_code in ['CL', 'CO', 'CR', 'DO', 'EC', 'GT', 'HN', 'MX', 'NI', 'PA', 'PE', 'PR', 'SV', 'UY', 'VE']:
+                            country_dids['latin-america'].append(did)
                         break
                 
                 # if did == 'did:plc:iyjda5z632gdbjgmotr6e55c':
@@ -419,7 +461,10 @@ if __name__ == "__main__":
                 except AttributeError:
                     print(f'{country_code} not found')
                     continue
-                print(f'{flag} {count}')
+                if count < 7:
+                    print(f'{flag} {country_name} {count}')
+                else:
+                    print(f'{flag} {count}')
             for continent_name, count in continents.most_common():
                 print(f'{continent_name} {count} {100.0 * count / total:.1f}%')
             for starterpack_uri in starterpack_info_uris:
