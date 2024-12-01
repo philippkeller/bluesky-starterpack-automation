@@ -15,21 +15,6 @@ do.py get-starterpacks <did>        - get all starterpacks for a given user
 do.py get-starterpack-members <uri> - get the members of a starterpack
 """
 
-
-#   "latin-america": {
-#     "name": "#buildinpublic Latin America",
-#     "uri": "at://did:plc:cv7n7pa4fmtkgyzfl2rf4xn3/app.bsky.graph.starterpack/3lca4klxfoa2s",
-#     "members": [
-#       "did:plc:a45oi2lir4w64f56szmzuezk",
-#       "did:plc:j7njyh72czysau5zmgsx3hz6",
-#       "did:plc:rjfhkbs5khtafl25575dkml3",
-#       "did:plc:s6s4hpwxtluk26gg6tuajaho",
-#       "did:plc:y73cxx76kfmyic3d2yeurmql"
-#     ],
-#     "list_uri": "at://did:plc:cv7n7pa4fmtkgyzfl2rf4xn3/app.bsky.graph.list/3lca4kl7rot2t",
-#     "created_at": "2024-12-01T07:46:26.521545Z"
-#   },
-
 from atproto import Client
 import emoji
 import requests
@@ -103,7 +88,7 @@ def get_all_starter_packs(did=CURRENT_USER_DID):
     return res
 
 @memory.cache
-def get_starter_pack_members(uri):
+def get_starter_pack_members(uri, cache_override=None):
     from atproto import models
     client = Client()
     client.login(os.getenv('BLUESKY_USERNAME'), os.getenv('BLUESKY_PASSWORD'))
@@ -254,9 +239,10 @@ def write_starterpacks(starterpacks):
 def update_starterpacks():
     # loop through all starterpacks in starterpacks.json
     starterpacks = json.load(open('starterpacks.json'))
+    now = datetime.datetime.utcnow().isoformat() + "Z"
     for country_iso in starterpacks:
         print(f'Updating {country_iso}')
-        members, list_uri, starter_pack_created_at = get_starter_pack_members(starterpacks[country_iso]['uri'])
+        members, list_uri, starter_pack_created_at = get_starter_pack_members(starterpacks[country_iso]['uri'], cache_override=now)
         starterpacks[country_iso] = dict(
             name=starterpacks[country_iso]['name'],
             uri=starterpacks[country_iso]['uri'],
