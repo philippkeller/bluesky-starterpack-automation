@@ -365,6 +365,7 @@ if __name__ == "__main__":
         sideload_posts = [
             ('DK', 'at://did:plc:52rfaxvrz6wij3cwkifh3ut7/app.bsky.feed.post/3lbu2sk5pur2s'),
             ('LT', 'at://did:plc:4emx4cti65cwfm2qzuqk7svn/app.bsky.feed.post/3lbwwvbaisk2w'),
+            ('TH', 'at://did:plc:egcl3ocfzkrmsp6j76xopowd/app.bsky.feed.post/3lc7qsfzvw223'),
         ]
         for country_iso, post_uri in sideload_posts:
             dids = list(get_post_mentions(post_uri))
